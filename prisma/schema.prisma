@@ -1,0 +1,159 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  generatedFileExtension = ".ts"
+  importFileExtension    = ".js"
+  moduleFormat           = "esm"
+  runtime                = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DelivererInfo {
+  client_id        Int                @id
+  document         String?
+  salary           Decimal            @db.Decimal(10, 2)
+  delivery_cost    Decimal            @db.Decimal(10, 2)
+  working_hours    String?            @db.VarChar(100)
+  status           String             @db.VarChar(50)
+  phone            String?            @db.VarChar(20)
+  users            users              @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  DeliveryTracking DeliveryTracking[]
+}
+
+model DeliveryTracking {
+  id            Int                       @id @default(autoincrement())
+  deliverer_id  Int?
+  order_id      Int
+  coordinates   String?
+  tracking_time DateTime?                 @default(now()) @db.Timestamp(6)
+  DelivererInfo DelivererInfo?            @relation(fields: [deliverer_id], references: [client_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model DeliveryZone {
+  id          Int                       @id @default(autoincrement())
+  order_id    Int?
+  item_id     Int?
+  name        String?                   @db.VarChar(255)
+  coordinates String?
+  Item        Item?                     @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Orders      Orders?                   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Item {
+  id           Int            @id @default(autoincrement())
+  name         String         @db.VarChar(255)
+  stock        Int
+  unit_price   Decimal        @db.Decimal(10, 2)
+  photo        String?
+  created_at   DateTime?      @default(now()) @db.Timestamp(6)
+  DeliveryZone DeliveryZone[]
+  OrderItem    OrderItem[]
+  SupplierItem SupplierItem[]
+}
+
+model OrderItem {
+  order_id Int
+  item_id  Int
+  quantity Int
+  Item     Item   @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Orders   Orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([order_id, item_id])
+}
+
+model Orders {
+  id              Int                  @id(map: "commands_pk") @default(autoincrement())
+  client_id       Int?
+  delivery_id     Int
+  deliver_address String               @db.VarChar(30)
+  coordinate      String
+  create_at       DateTime             @db.Timestamp(6)
+  status_cmd_id   Int                  @default(1)
+  DeliveryZone    DeliveryZone[]
+  OrderItem       OrderItem[]
+  users           users                @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "client_id")
+  status_cmd      status_cmd           @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "status_cmd_id")
+}
+
+model Store {
+  id            Int                       @id @default(autoincrement())
+  name          String                    @db.VarChar(255)
+  address       String?
+  location      String?
+  banner_photos String?
+  client_id     Int?                      @unique
+  users         users?                    @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model SupplierItem {
+  supplier_id Int
+  item_id     Int
+  Item        Item  @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users       users @relation(fields: [supplier_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([supplier_id, item_id])
+}
+
+model partner_types {
+  id       Int        @id(map: "partner_types_pk") @default(autoincrement())
+  name     String     @unique(map: "partner_types_unique") @db.VarChar(25)
+  partners partners[]
+}
+
+model partners {
+  id            Int           @id(map: "partners_pk") @default(autoincrement())
+  name          String        @db.VarChar(50)
+  partner_type  Int
+  contact_email String        @unique(map: "partners_unique_ce") @db.VarChar(120)
+  contact_phone Int           @unique(map: "partners_unique_cp")
+  metadata      Json?
+  address       Json?
+  is_actif      Boolean       @default(true)
+  create_at     DateTime      @default(now()) @db.Timestamp(6)
+  update_at     DateTime      @default(now()) @db.Timestamp(6)
+  website       String        @unique(map: "partners_unique") @db.VarChar(50)
+  partner_types partner_types @relation(fields: [partner_type], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_partner_type")
+}
+
+model role_types {
+  id    Int     @id(map: "role_types_pk")
+  name  String  @unique(map: "role_types_unique") @db.VarChar
+  users users[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
+
+model status_cmd {
+  id     Int     @id(map: "status_cmd_pk") @default(autoincrement())
+  name   String  @db.VarChar(25)
+  Orders Orders?
+}
+
+model users {
+  id            Int                       @id(map: "users_pk") @default(autoincrement())
+  first_name    String                    @db.VarChar(50)
+  email         String                    @unique(map: "users_unique") @db.VarChar(50)
+  password      String                    @db.VarChar
+  photo         String?                   @db.VarChar
+  address       String?                   @db.VarChar
+  location      String?
+  type_id       Int                       @default(1)
+  create_at     DateTime                  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  google_id     String?                   @unique @db.VarChar(50)
+  DelivererInfo DelivererInfo?
+  Orders        Orders?
+  Store         Store?
+  SupplierItem  SupplierItem[]
+  role_types    role_types                @relation(fields: [type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "type_role_id")
+}
